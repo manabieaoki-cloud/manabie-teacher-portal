@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MANABIE 講師ポータル</title>
+<style>
+:root { --navy:#005088; --green:#8DB600; --brown:#4b2c20; --soft-bg:#f8f5f0; }
+* { box-sizing:border-box; }
+body { font-family:'Meiryo','Noto Sans JP',sans-serif; margin:0; background:var(--soft-bg); color:#333; line-height:1.6; }
+.header { background:var(--navy); color:#fff; padding:14px 22px; display:flex; justify-content:space-between; align-items:center; }
+.header h1 { margin:0; font-size:18px; }
+.header .user-info { font-size:13px; }
+.container { max-width:900px; margin:24px auto; padding:0 16px; }
+.card { background:#fff; border-radius:8px; padding:20px; margin-bottom:16px; box-shadow:0 1px 3px rgba(0,0,0,0.08); }
+.card h2 { margin-top:0; color:var(--navy); font-size:16px; border-bottom:2px solid var(--green); padding-bottom:8px; }
+.card-info { background:#eaf3fa; border-left:4px solid var(--navy); padding:10px 14px; border-radius:4px; font-size:13px; margin-bottom:12px; }
+.card-warn { background:#fff3e0; border-left:4px solid #e08a3c; padding:10px 14px; border-radius:4px; font-size:13px; margin-bottom:12px; }
+.card-success { background:#e8f5e9; border-left:4px solid var(--green); padding:10px 14px; border-radius:4px; font-size:13px; margin-bottom:12px; }
+button { padding:10px 20px; border:none; border-radius:6px; font-weight:bold; cursor:pointer; font-size:14px; }
+.btn-primary { background:var(--navy); color:#fff; }
+.btn-primary:hover { background:#003c66; }
+.btn-secondary { background:#777; color:#fff; }
+.btn-secondary:hover { background:#555; }
+input[type="text"], input[type="email"], input[type="password"], input[type="number"], select, textarea {
+  width:100%; padding:8px 10px; border:1px solid #ccc; border-radius:4px; font-size:14px; font-family:inherit;
+}
+label { display:block; margin:8px 0; font-size:13px; }
+table { width:100%; border-collapse:collapse; font-size:13px; }
+th, td { padding:6px 8px; border:1px solid #ddd; text-align:center; }
+th { background:var(--soft-bg); }
+.sched-table input[type="radio"] { transform:scale(1.2); }
+.tab-nav { display:flex; border-bottom:2px solid var(--green); margin-bottom:16px; }
+.tab-nav .tab { padding:10px 18px; cursor:pointer; font-weight:bold; color:#776660; }
+.tab-nav .tab.active { color:var(--navy); border-bottom:3px solid var(--green); background:var(--soft-bg); }
+.tab-content { display:none; }
+.tab-content.active { display:block; }
+#login-section { max-width:400px; margin:80px auto; }
+.toast { position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:#333; color:#fff; padding:12px 24px; border-radius:6px; font-size:14px; display:none; z-index:1000; }
+.subject-tag { display:inline-block; padding:4px 10px; margin:4px; background:#eaf3fa; border:1px solid var(--navy); border-radius:14px; cursor:pointer; font-size:12px; }
+.subject-tag.selected { background:var(--navy); color:#fff; }
+.subject-tag.priority-low { background:#fff3e0; border-color:#e08a3c; }
+.subject-tag.priority-low.selected { background:#e08a3c; color:#fff; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>📚 MANABIE 講師ポータル</h1>
+  <div class="user-info" id="user-info">未ログイン</div>
+</div>
+
+<!-- ログイン画面 -->
+<div id="login-section" class="container">
+  <div class="card">
+    <h2>🔐 ログイン</h2>
+    <div class="card-info">事務局から配布されたパスコードを入力してください。</div>
+    <label>氏名（フルネーム）<br><input type="text" id="login-name" placeholder="例: 中山 廉心" autocomplete="off"></label>
+    <label>パスコード<br><input type="password" id="login-pass" placeholder="例: inst1_xxx"></label>
+    <div style="text-align:right;margin-top:12px;">
+      <button class="btn-primary" onclick="app.login()">ログイン</button>
+    </div>
+    <div id="login-err" style="color:#c0392b;margin-top:10px;font-size:13px;"></div>
+  </div>
+</div>
+
+<!-- メイン画面 -->
+<div id="main-section" class="container" style="display:none;">
+  <div class="card">
+    <div class="tab-nav">
+      <div class="tab active" onclick="app.switchTab('schedule')">📅 勤務可能スケジュール</div>
+      <div class="tab" onclick="app.switchTab('subjects')">📖 指導科目・モチベ</div>
+      <div class="tab" onclick="app.switchTab('contact')">📞 連絡先</div>
+    </div>
+
+    <!-- スケジュール入力 -->
+    <div id="tab-schedule" class="tab-content active">
+      <h2>勤務可能スケジュール</h2>
+      <div class="card-info">
+        対象月を選んで、各曜日・時刻の勤務可否を選択してください。<br>
+        ✓ 出勤可 / △ 応相談 / ✗ 不可 から選びます。
+      </div>
+      <label>対象月<br>
+        <select id="sched-month" onchange="app.renderSchedule()" style="max-width:200px;"></select>
+      </label>
+      <div style="overflow-x:auto;margin-top:14px;">
+        <table class="sched-table" id="sched-table"></table>
+      </div>
+      <div class="card-warn" style="margin-top:14px;">
+        ⚠ 提出後は教室長の承認待ちとなります。承認されると正式登録です。
+      </div>
+      <div style="text-align:right;margin-top:14px;">
+        <button class="btn-secondary" onclick="app.fillAll('available')">全枠を「✓ 出勤可」</button>
+        <button class="btn-secondary" onclick="app.fillAll('unavailable')">全枠を「✗ 不可」</button>
+        <button class="btn-primary" onclick="app.submitSchedule()">📤 提出する</button>
+      </div>
+    </div>
+
+    <!-- 指導科目 -->
+    <div id="tab-subjects" class="tab-content">
+      <h2>指導可能科目とイレギュラー対応モチベーション</h2>
+      <div class="card-info">指導可能な科目を選択し、各科目の優先度を設定してください。</div>
+      <p><strong>科目選択（クリックで切替）</strong></p>
+      <p style="font-size:11px;color:#776660;">緑＝高優先（得意）／オレンジ＝低優先（可だが他講師優先）／灰色＝指導不可</p>
+      <div id="subject-list" style="margin:10px 0;"></div>
+      <label style="margin-top:14px;">イレギュラー対応モチベーション<br>
+        <select id="motivation" style="max-width:240px;">
+          <option value="high">高（積極的に対応可）</option>
+          <option value="normal" selected>普通</option>
+          <option value="low">低（他講師優先で）</option>
+          <option value="ng">不可</option>
+        </select>
+      </label>
+      <label>週あたり最大コマ数<br>
+        <input type="number" id="max-koma" min="0" max="60" value="0" style="max-width:120px;"> コマ
+      </label>
+      <div style="text-align:right;margin-top:14px;">
+        <button class="btn-primary" onclick="app.submitSubjects()">📤 提出する</button>
+      </div>
+    </div>
+
+    <!-- 連絡先 -->
+    <div id="tab-contact" class="tab-content">
+      <h2>連絡先情報</h2>
+      <div class="card-info">メールアドレスと受信可能時間帯を登録してください。教室長承認後に正式登録されます。</div>
+      <label>メールアドレス<br><input type="email" id="contact-email" placeholder="example@example.com"></label>
+      <label>電話番号<br><input type="text" id="contact-phone" placeholder="090-1234-5678"></label>
+      <p style="margin-top:14px;"><strong>アラートメール受信可能時間帯</strong></p>
+      <label><input type="checkbox" id="contact-night" onchange="app.toggleHours()"> 24時間受信OK（深夜でも即送信）</label>
+      <div id="hours-row" style="display:flex;gap:10px;align-items:center;margin-top:8px;">
+        <label>朝 <input type="number" id="contact-start" min="0" max="23" value="7" style="width:70px;"> 時 〜</label>
+        <label>夜 <input type="number" id="contact-end" min="0" max="23" value="22" style="width:70px;"> 時</label>
+      </div>
+      <div style="text-align:right;margin-top:14px;">
+        <button class="btn-primary" onclick="app.submitContact()">📤 提出する</button>
+      </div>
+    </div>
+  </div>
+
+  <div style="text-align:right;margin-top:8px;">
+    <button class="btn-secondary" onclick="app.logout()">ログアウト</button>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script>
+// ============================================================
+// MANABIE 講師ポータル v1
+// - GAS v10 にバックエンド接続
+// - スケジュール / 指導科目 / 連絡先を講師本人が入力→教室長承認待ち
+// ============================================================
+const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbxXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX/exec';
+// ↑ Seat Planner v2 と同じGAS WebアプリURLに書き換えてください
+
+const DAY_NAMES_JP = ['月','火','水','木','金','土','日'];
+const DAY_NAMES_EN = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'];
+const TIME_SLOTS = ['15:00','16:00','17:00','18:00','19:00','20:00','21:00'];
+
+const app = {
+  currentInst: null,
+  scheduleData: {}, // { 'monday': { '15:00': 'available' } }
+  subjectData: { subjects: [], priorities: {}, motivation: 'normal', maxKoma: 0 },
+  
+  showToast: function(msg, isError) {
+    const t = document.getElementById('toast');
+    t.innerText = msg;
+    t.style.background = isError ? '#c0392b' : '#333';
+    t.style.display = 'block';
+    clearTimeout(window._tt);
+    window._tt = setTimeout(() => { t.style.display = 'none'; }, 3500);
+  },
+
+  login: async function() {
+    const name = document.getElementById('login-name').value.trim();
+    const pass = document.getElementById('login-pass').value.trim();
+    const err = document.getElementById('login-err');
+    err.innerText = '';
+    if (!name || !pass) { err.innerText = '氏名とパスコード両方を入力してください'; return; }
+    try {
+      const r = await fetch(GAS_API_URL, {
+        method: 'POST', mode: 'cors', headers: {'Content-Type':'text/plain'},
+        body: JSON.stringify({ op: 'teacherLogin', passcode: pass })
+      });
+      const d = await r.json();
+      if (d.status === 'success') {
+        // 氏名の簡易チェック（空白除去で比較）
+        const stripped = name.replace(/\s+/g, '');
+        const dbStripped = (d.inst.name || '').replace(/\s+/g, '');
+        if (stripped !== dbStripped) {
+          err.innerText = '氏名とパスコードが一致しません';
+          return;
+        }
+        this.currentInst = d.inst;
+        document.getElementById('user-info').innerText = d.inst.name + ' 先生';
+        document.getElementById('login-section').style.display = 'none';
+        document.getElementById('main-section').style.display = 'block';
+        this.initMain();
+      } else {
+        err.innerText = d.message || 'ログイン失敗';
+      }
+    } catch (e) {
+      err.innerText = '通信エラー: ' + e.message;
+    }
+  },
+
+  logout: function() {
+    this.currentInst = null;
+    document.getElementById('login-section').style.display = 'block';
+    document.getElementById('main-section').style.display = 'none';
+    document.getElementById('login-pass').value = '';
+    document.getElementById('user-info').innerText = '未ログイン';
+  },
+
+  initMain: function() {
+    // 月セレクトを準備（今月＋翌月＋翌々月）
+    const sel = document.getElementById('sched-month');
+    sel.innerHTML = '';
+    const now = new Date();
+    for (let i = 0; i < 3; i++) {
+      const y = now.getFullYear();
+      const m = now.getMonth() + i + 1; // 翌月から
+      const ym = new Date(y, m - 1, 1);
+      const ymStr = ym.getFullYear() + '-' + String(ym.getMonth() + 1).padStart(2, '0');
+      const opt = document.createElement('option');
+      opt.value = ymStr;
+      opt.innerText = ym.getFullYear() + '年' + (ym.getMonth() + 1) + '月';
+      sel.appendChild(opt);
+    }
+    this.renderSchedule();
+    this.renderSubjects();
+    this.renderContact();
+  },
+
+  switchTab: function(tabId) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    event.target.classList.add('active');
+    document.getElementById('tab-' + tabId).classList.add('active');
+  },
+
+  renderSchedule: function() {
+    const tbl = document.getElementById('sched-table');
+    let html = '<thead><tr><th>時刻</th>';
+    DAY_NAMES_JP.forEach(d => html += '<th>' + d + '</th>');
+    html += '</tr></thead><tbody>';
+    TIME_SLOTS.forEach(t => {
+      html += '<tr><td><strong>' + t + '</strong></td>';
+      DAY_NAMES_EN.forEach(d => {
+        const key = d + '_' + t;
+        const cur = (this.scheduleData[d] && this.scheduleData[d][t]) || '';
+        html += '<td>';
+        html += '<select onchange="app.setSched(\'' + d + '\',\'' + t + '\',this.value)" style="padding:4px;font-size:12px;">';
+        html += '<option value=""' + (cur===''?' selected':'') + '>−</option>';
+        html += '<option value="available"' + (cur==='available'?' selected':'') + '>✓</option>';
+        html += '<option value="maybe"' + (cur==='maybe'?' selected':'') + '>△</option>';
+        html += '<option value="unavailable"' + (cur==='unavailable'?' selected':'') + '>✗</option>';
+        html += '</select></td>';
+      });
+      html += '</tr>';
+    });
+    html += '</tbody>';
+    tbl.innerHTML = html;
+  },
+
+  setSched: function(day, time, val) {
+    if (!this.scheduleData[day]) this.scheduleData[day] = {};
+    this.scheduleData[day][time] = val;
+  },
+
+  fillAll: function(val) {
+    DAY_NAMES_EN.forEach(d => {
+      this.scheduleData[d] = {};
+      TIME_SLOTS.forEach(t => { this.scheduleData[d][t] = val; });
+    });
+    this.renderSchedule();
+  },
+
+  submitSchedule: async function() {
+    const month = document.getElementById('sched-month').value;
+    if (!month) { this.showToast('対象月を選んでください', true); return; }
+    if (!confirm(month + ' のスケジュールを提出します。\n提出後は教室長の承認待ちとなります。よろしいですか？')) return;
+    try {
+      const r = await fetch(GAS_API_URL, {
+        method: 'POST', mode: 'cors', headers: {'Content-Type':'text/plain'},
+        body: JSON.stringify({
+          op: 'submitSchedule',
+          instId: this.currentInst.id,
+          passcode: document.getElementById('login-pass').value.trim(),
+          month: month,
+          weeklyAvailability: this.scheduleData
+        })
+      });
+      const d = await r.json();
+      if (d.status === 'success') this.showToast('✓ ' + d.message);
+      else this.showToast('⚠ ' + d.message, true);
+    } catch (e) {
+      this.showToast('通信エラー: ' + e.message, true);
+    }
+  },
+
+  renderSubjects: function() {
+    const list = ['英語','数学','算数','国語','理科','社会','英検','数検','漢検','プログラミング'];
+    const c = document.getElementById('subject-list');
+    c.innerHTML = list.map(s => {
+      const selected = this.subjectData.subjects.includes(s);
+      const pri = this.subjectData.priorities[s] || 'high';
+      const cls = !selected ? 'subject-tag' : (pri === 'low' ? 'subject-tag selected priority-low' : 'subject-tag selected');
+      return '<span class="' + cls + '" onclick="app.toggleSubject(\'' + s + '\')">' + s + (selected ? (pri === 'low' ? ' (低)' : ' (高)') : '') + '</span>';
+    }).join('');
+  },
+
+  toggleSubject: function(s) {
+    const idx = this.subjectData.subjects.indexOf(s);
+    if (idx === -1) {
+      this.subjectData.subjects.push(s);
+      this.subjectData.priorities[s] = 'high';
+    } else {
+      // 既に選択中 → 高→低→外す のサイクル
+      const cur = this.subjectData.priorities[s] || 'high';
+      if (cur === 'high') {
+        this.subjectData.priorities[s] = 'low';
+      } else {
+        this.subjectData.subjects.splice(idx, 1);
+        delete this.subjectData.priorities[s];
+      }
+    }
+    this.renderSubjects();
+  },
+
+  submitSubjects: async function() {
+    if (!confirm('指導可能科目とモチベーションを提出します。\n提出後は教室長の承認待ちとなります。よろしいですか？')) return;
+    const month = document.getElementById('sched-month').value || new Date().toISOString().substring(0,7);
+    try {
+      const r = await fetch(GAS_API_URL, {
+        method: 'POST', mode: 'cors', headers: {'Content-Type':'text/plain'},
+        body: JSON.stringify({
+          op: 'submitSchedule',
+          instId: this.currentInst.id,
+          passcode: document.getElementById('login-pass').value.trim(),
+          month: month,
+          weeklyAvailability: this.scheduleData,
+          subjects: this.subjectData.subjects,
+          subjectPriorities: this.subjectData.priorities,
+          motivation: document.getElementById('motivation').value,
+          maxKomaPerWeek: parseInt(document.getElementById('max-koma').value, 10) || 0
+        })
+      });
+      const d = await r.json();
+      if (d.status === 'success') this.showToast('✓ 提出完了');
+      else this.showToast('⚠ ' + d.message, true);
+    } catch (e) {
+      this.showToast('通信エラー: ' + e.message, true);
+    }
+  },
+
+  renderContact: function() {
+    if (!this.currentInst) return;
+    document.getElementById('contact-email').value = this.currentInst.email || '';
+    document.getElementById('contact-phone').value = this.currentInst.phone || '';
+    const np = this.currentInst.notifyPref || { acceptNight:false, startHour:7, endHour:22 };
+    document.getElementById('contact-night').checked = !!np.acceptNight;
+    document.getElementById('contact-start').value = np.startHour ?? 7;
+    document.getElementById('contact-end').value = np.endHour ?? 22;
+    this.toggleHours();
+  },
+
+  toggleHours: function() {
+    const night = document.getElementById('contact-night').checked;
+    document.getElementById('hours-row').style.display = night ? 'none' : 'flex';
+  },
+
+  submitContact: async function() {
+    const email = document.getElementById('contact-email').value.trim();
+    const phone = document.getElementById('contact-phone').value.trim();
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      this.showToast('メールアドレスの形式が不正です', true); return;
+    }
+    if (!confirm('連絡先を提出します。\n提出後は教室長の承認待ちとなります。よろしいですか？')) return;
+    const night = document.getElementById('contact-night').checked;
+    const startH = parseInt(document.getElementById('contact-start').value, 10);
+    const endH = parseInt(document.getElementById('contact-end').value, 10);
+    try {
+      const r = await fetch(GAS_API_URL, {
+        method: 'POST', mode: 'cors', headers: {'Content-Type':'text/plain'},
+        body: JSON.stringify({
+          op: 'submitContact',
+          instId: this.currentInst.id,
+          passcode: document.getElementById('login-pass').value.trim(),
+          email: email, phone: phone,
+          notifyPref: { acceptNight: night, startHour: isNaN(startH)?7:startH, endHour: isNaN(endH)?22:endH, channels: ['email'] }
+        })
+      });
+      const d = await r.json();
+      if (d.status === 'success') this.showToast('✓ 提出完了');
+      else this.showToast('⚠ ' + (d.message || '不明なエラー'), true);
+    } catch (e) {
+      this.showToast('通信エラー: ' + e.message, true);
+    }
+  }
+};
+</script>
+</body>
+</html>
