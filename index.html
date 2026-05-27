@@ -41,6 +41,13 @@ th { background:var(--soft-bg); }
 .subject-tag.selected { background:var(--navy); color:#fff; }
 .subject-tag.priority-low { background:#fff3e0; border-color:#e08a3c; }
 .subject-tag.priority-low.selected { background:#e08a3c; color:#fff; }
+.sched-cell { display:inline-block; width:42px; height:32px; line-height:32px; text-align:center; cursor:pointer; border:1px solid #ccc; border-radius:4px; font-weight:bold; font-size:14px; user-select:none; }
+.sched-cell.cell-disabled { background:#eee; color:#bbb; cursor:not-allowed; }
+.sched-cell.cell-ok { background:#c8e6c9; color:#1b5e20; border-color:#8DB600; }
+.sched-cell.cell-maybe { background:#fff3e0; color:#bf5f00; border-color:#e08a3c; }
+.sched-cell.cell-ng { background:#ffcdd2; color:#8b0000; border-color:#c0392b; }
+.btn-day-all { padding:3px 6px; font-size:10px; background:var(--green); color:#fff; border:none; border-radius:3px; cursor:pointer; margin-top:2px; }
+.btn-day-clear { padding:3px 6px; font-size:10px; background:#999; color:#fff; border:none; border-radius:3px; cursor:pointer; margin-top:2px; margin-left:2px; }
 </style>
 </head>
 <body>
@@ -69,6 +76,7 @@ th { background:var(--soft-bg); }
   <div class="card">
     <div class="tab-nav">
       <div class="tab active" onclick="app.switchTab('schedule')">📅 勤務可能スケジュール</div>
+      <div class="tab" onclick="app.switchTab('change')">📝 変更申請</div>
       <div class="tab" onclick="app.switchTab('subjects')">📖 指導科目・モチベ</div>
       <div class="tab" onclick="app.switchTab('contact')">📞 連絡先</div>
     </div>
@@ -77,8 +85,10 @@ th { background:var(--soft-bg); }
     <div id="tab-schedule" class="tab-content active">
       <h2>勤務可能スケジュール</h2>
       <div class="card-info">
-        対象月を選んで、各曜日・時刻の勤務可否を選択してください。<br>
-        ✓ 出勤可 / △ 応相談 / ✗ 不可 から選びます。
+        対象月を選んで、各セルをタップして勤務可否を切り替えてください。<br>
+        タップ1回ごとに <strong>− → ✓出勤可 → △応相談 → ✗不可</strong> でサイクル切替。<br>
+        平日は15:00以降、土日は9:00以降が選択可能です。<br>
+        曜日ごとの「全✓」ボタンで一括設定もできます。
       </div>
       <label>対象月<br>
         <select id="sched-month" onchange="app.renderSchedule()" style="max-width:200px;"></select>
@@ -93,6 +103,40 @@ th { background:var(--soft-bg); }
         <button class="btn-secondary" onclick="app.fillAll('available')">全枠を「✓ 出勤可」</button>
         <button class="btn-secondary" onclick="app.fillAll('unavailable')">全枠を「✗ 不可」</button>
         <button class="btn-primary" onclick="app.submitSchedule()">📤 提出する</button>
+      </div>
+    </div>
+
+    <!-- 変更申請 -->
+    <div id="tab-change" class="tab-content">
+      <h2>登録済スケジュールの変更申請</h2>
+      <div class="card-info">
+        提出済みのスケジュールに当月途中で変更が生じた場合、こちらから変更申請してください。<br>
+        教室長の承認後、座席表に反映されます。
+      </div>
+      <label>対象日付<br><input type="date" id="change-date"></label>
+      <label>対象時刻<br>
+        <select id="change-time">
+          <option value="09:00">09:00</option><option value="10:00">10:00</option>
+          <option value="11:00">11:00</option><option value="12:00">12:00</option>
+          <option value="13:00">13:00</option><option value="14:00">14:00</option>
+          <option value="15:00">15:00</option><option value="16:00">16:00</option>
+          <option value="17:00">17:00</option><option value="18:00">18:00</option>
+          <option value="19:00">19:00</option><option value="20:00">20:00</option>
+          <option value="21:00">21:00</option>
+        </select>
+      </label>
+      <label>変更内容<br>
+        <select id="change-status">
+          <option value="unavailable">✗ 不可になった（休む）</option>
+          <option value="available">✓ 急遽出勤可になった</option>
+          <option value="maybe">△ 応相談に変更</option>
+        </select>
+      </label>
+      <label>理由・補足（教室長に伝えたいこと）<br>
+        <textarea id="change-reason" rows="3" placeholder="例: 体調不良のため、振替希望日は◯月◯日"></textarea>
+      </label>
+      <div style="text-align:right;margin-top:14px;">
+        <button class="btn-primary" onclick="app.submitScheduleChange()">📤 変更を申請する</button>
       </div>
     </div>
 
@@ -155,7 +199,22 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycby5xhjjEHWc6-PQwTTK
 
 const DAY_NAMES_JP = ['月','火','水','木','金','土','日'];
 const DAY_NAMES_EN = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'];
-const TIME_SLOTS = ['15:00','16:00','17:00','18:00','19:00','20:00','21:00'];
+const ALL_TIME_SLOTS = ['09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00','21:00'];
+const WEEKDAY_START_HOUR = 15; // 月-金は15:00以降
+const WEEKEND_START_HOUR = 9;  // 土日は09:00以降
+// 曜日と時刻の組合せが選択可能かを判定
+function isSlotAllowed(dayEn, time) {
+  const hour = parseInt(time.split(':')[0], 10);
+  const isWeekend = (dayEn === 'saturday' || dayEn === 'sunday');
+  return hour >= (isWeekend ? WEEKEND_START_HOUR : WEEKDAY_START_HOUR);
+}
+// 次の状態を返す（クリックサイクル: '' → available → maybe → unavailable → ''）
+function nextSchedState(cur) {
+  if (cur === '' || !cur) return 'available';
+  if (cur === 'available') return 'maybe';
+  if (cur === 'maybe') return 'unavailable';
+  return '';
+}
 
 const app = {
   currentInst: null,
@@ -233,21 +292,30 @@ const app = {
 
   renderSchedule: function() {
     const tbl = document.getElementById('sched-table');
-    let html = '<thead><tr><th>時刻</th>';
-    DAY_NAMES_JP.forEach(d => html += '<th>' + d + '</th>');
+    let html = '<thead><tr><th style="width:60px;">時刻</th>';
+    DAY_NAMES_JP.forEach((d, idx) => {
+      const dayEn = DAY_NAMES_EN[idx];
+      html += '<th><div>' + d + '</div>'
+        + '<button class="btn-day-all" onclick="app.fillDay(\'' + dayEn + '\',\'available\')">全✓</button>'
+        + '<button class="btn-day-clear" onclick="app.fillDay(\'' + dayEn + '\',\'\')">クリア</button>'
+        + '</th>';
+    });
     html += '</tr></thead><tbody>';
-    TIME_SLOTS.forEach(t => {
+    ALL_TIME_SLOTS.forEach(t => {
       html += '<tr><td><strong>' + t + '</strong></td>';
       DAY_NAMES_EN.forEach(d => {
-        const key = d + '_' + t;
-        const cur = (this.scheduleData[d] && this.scheduleData[d][t]) || '';
-        html += '<td>';
-        html += '<select onchange="app.setSched(\'' + d + '\',\'' + t + '\',this.value)" style="padding:4px;font-size:12px;">';
-        html += '<option value=""' + (cur===''?' selected':'') + '>−</option>';
-        html += '<option value="available"' + (cur==='available'?' selected':'') + '>✓</option>';
-        html += '<option value="maybe"' + (cur==='maybe'?' selected':'') + '>△</option>';
-        html += '<option value="unavailable"' + (cur==='unavailable'?' selected':'') + '>✗</option>';
-        html += '</select></td>';
+        const allowed = isSlotAllowed(d, t);
+        if (!allowed) {
+          html += '<td><span class="sched-cell cell-disabled">−</span></td>';
+        } else {
+          const cur = (this.scheduleData[d] && this.scheduleData[d][t]) || '';
+          let cls = 'sched-cell';
+          let label = '−';
+          if (cur === 'available') { cls += ' cell-ok'; label = '✓'; }
+          else if (cur === 'maybe') { cls += ' cell-maybe'; label = '△'; }
+          else if (cur === 'unavailable') { cls += ' cell-ng'; label = '✗'; }
+          html += '<td><span class="' + cls + '" onclick="app.toggleSched(\'' + d + '\',\'' + t + '\')">' + label + '</span></td>';
+        }
       });
       html += '</tr>';
     });
@@ -255,15 +323,34 @@ const app = {
     tbl.innerHTML = html;
   },
 
+  toggleSched: function(day, time) {
+    if (!isSlotAllowed(day, time)) return;
+    if (!this.scheduleData[day]) this.scheduleData[day] = {};
+    const cur = this.scheduleData[day][time] || '';
+    this.scheduleData[day][time] = nextSchedState(cur);
+    this.renderSchedule();
+  },
+
   setSched: function(day, time, val) {
+    // 互換性のため残置
     if (!this.scheduleData[day]) this.scheduleData[day] = {};
     this.scheduleData[day][time] = val;
+  },
+
+  fillDay: function(day, val) {
+    if (!this.scheduleData[day]) this.scheduleData[day] = {};
+    ALL_TIME_SLOTS.forEach(t => {
+      if (isSlotAllowed(day, t)) this.scheduleData[day][t] = val;
+    });
+    this.renderSchedule();
   },
 
   fillAll: function(val) {
     DAY_NAMES_EN.forEach(d => {
       this.scheduleData[d] = {};
-      TIME_SLOTS.forEach(t => { this.scheduleData[d][t] = val; });
+      ALL_TIME_SLOTS.forEach(t => {
+        if (isSlotAllowed(d, t)) this.scheduleData[d][t] = val;
+      });
     });
     this.renderSchedule();
   },
@@ -292,7 +379,7 @@ const app = {
   },
 
   renderSubjects: function() {
-    const list = ['英語','数学','算数','国語','理科','社会','英検','数検','漢検','プログラミング'];
+    const list = ['英語','数学','算数','国語','理科','社会','英検','模試監督','英検監督'];
     const c = document.getElementById('subject-list');
     c.innerHTML = list.map(s => {
       const selected = this.subjectData.subjects.includes(s);
@@ -360,6 +447,37 @@ const app = {
   toggleHours: function() {
     const night = document.getElementById('contact-night').checked;
     document.getElementById('hours-row').style.display = night ? 'none' : 'flex';
+  },
+
+  submitScheduleChange: async function() {
+    const date = document.getElementById('change-date').value;
+    const time = document.getElementById('change-time').value;
+    const status = document.getElementById('change-status').value;
+    const reason = document.getElementById('change-reason').value.trim();
+    if (!date) { this.showToast('対象日付を入力してください', true); return; }
+    if (!reason) { this.showToast('理由・補足を入力してください', true); return; }
+    if (!confirm(date + ' ' + time + ' のスケジュール変更を申請します。\n変更内容: ' + status + '\n\n教室長の承認を待ってから座席表に反映されます。よろしいですか？')) return;
+    try {
+      const r = await fetch(GAS_API_URL, {
+        method: 'POST', mode: 'cors', headers: {'Content-Type':'text/plain'},
+        body: JSON.stringify({
+          op: 'submitScheduleChange',
+          instId: this.currentInst.id,
+          passcode: document.getElementById('login-pass').value.trim(),
+          date: date, time: time, status: status, reason: reason
+        })
+      });
+      const d = await r.json();
+      if (d.status === 'success') {
+        this.showToast('✓ 変更申請を提出しました');
+        document.getElementById('change-date').value = '';
+        document.getElementById('change-reason').value = '';
+      } else {
+        this.showToast('⚠ ' + (d.message || '不明なエラー'), true);
+      }
+    } catch (e) {
+      this.showToast('通信エラー: ' + e.message, true);
+    }
   },
 
   submitContact: async function() {
