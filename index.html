@@ -55,7 +55,7 @@ th { background:var(--soft-bg); }
   <div class="card">
     <h2>🔐 ログイン</h2>
     <div class="card-info">事務局から配布されたパスコードを入力してください。</div>
-    <label>氏名（フルネーム）<br><input type="text" id="login-name" placeholder="例: 中山 廉心" autocomplete="off"></label>
+    <label>氏名（フルネーム・任意・確認用）<br><input type="text" id="login-name" placeholder="例: 中山 廉心" autocomplete="off"></label>
     <label>パスコード<br><input type="password" id="login-pass" placeholder="例: inst1_xxx"></label>
     <div style="text-align:right;margin-top:12px;">
       <button class="btn-primary" onclick="app.login()">ログイン</button>
@@ -151,7 +151,7 @@ th { background:var(--soft-bg); }
 // - スケジュール / 指導科目 / 連絡先を講師本人が入力→教室長承認待ち
 // ============================================================
 const GAS_API_URL = 'https://script.google.com/macros/s/AKfycby5xhjjEHWc6-PQwTTKaWfBCPFasXAWzqH_4e0xbMJnHjO4M2wRbCBsc8hwRNOlyAGk/exec';
-// ↑ Seat Planner v2 と同じGAS WebアプリURLに書き換えてください
+// ※ GAS v10 を新デプロイしてURLが変わった場合は上記を新URLに差し替えてください
 
 const DAY_NAMES_JP = ['月','火','水','木','金','土','日'];
 const DAY_NAMES_EN = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'];
@@ -172,11 +172,10 @@ const app = {
   },
 
   login: async function() {
-    const name = document.getElementById('login-name').value.trim();
     const pass = document.getElementById('login-pass').value.trim();
     const err = document.getElementById('login-err');
     err.innerText = '';
-    if (!name || !pass) { err.innerText = '氏名とパスコード両方を入力してください'; return; }
+    if (!pass) { err.innerText = 'パスコードを入力してください'; return; }
     try {
       const r = await fetch(GAS_API_URL, {
         method: 'POST', mode: 'cors', headers: {'Content-Type':'text/plain'},
@@ -184,13 +183,6 @@ const app = {
       });
       const d = await r.json();
       if (d.status === 'success') {
-        // 氏名の簡易チェック（空白除去で比較）
-        const stripped = name.replace(/\s+/g, '');
-        const dbStripped = (d.inst.name || '').replace(/\s+/g, '');
-        if (stripped !== dbStripped) {
-          err.innerText = '氏名とパスコードが一致しません';
-          return;
-        }
         this.currentInst = d.inst;
         document.getElementById('user-info').innerText = d.inst.name + ' 先生';
         document.getElementById('login-section').style.display = 'none';
