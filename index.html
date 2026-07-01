@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>MANABIE 講師ポータル</title>
 <style>
-:root { --navy:#005088; --green:#8DB600; --brown:#4b2c20; --soft-bg:#f8f5f0; }
+:root { --navy:#4b2c20; --green:#8DB600; --brown:#4b2c20; --soft-bg:#f7f5f0; }
 * { box-sizing:border-box; }
 body { font-family:'Meiryo','Noto Sans JP',sans-serif; margin:0; background:var(--soft-bg); color:#333; line-height:1.6; }
 .header { background:var(--navy); color:#fff; padding:14px 22px; display:flex; justify-content:space-between; align-items:center; }
@@ -14,12 +14,12 @@ body { font-family:'Meiryo','Noto Sans JP',sans-serif; margin:0; background:var(
 .container { max-width:900px; margin:24px auto; padding:0 16px; }
 .card { background:#fff; border-radius:8px; padding:20px; margin-bottom:16px; box-shadow:0 1px 3px rgba(0,0,0,0.08); }
 .card h2 { margin-top:0; color:var(--navy); font-size:16px; border-bottom:2px solid var(--green); padding-bottom:8px; }
-.card-info { background:#eaf3fa; border-left:4px solid var(--navy); padding:10px 14px; border-radius:4px; font-size:13px; margin-bottom:12px; }
+.card-info { background:#f3f0e8; border-left:4px solid var(--navy); padding:10px 14px; border-radius:4px; font-size:13px; margin-bottom:12px; }
 .card-warn { background:#fff3e0; border-left:4px solid #e08a3c; padding:10px 14px; border-radius:4px; font-size:13px; margin-bottom:12px; }
 .card-success { background:#e8f5e9; border-left:4px solid var(--green); padding:10px 14px; border-radius:4px; font-size:13px; margin-bottom:12px; }
 button { padding:10px 20px; border:none; border-radius:6px; font-weight:bold; cursor:pointer; font-size:14px; }
 .btn-primary { background:var(--navy); color:#fff; }
-.btn-primary:hover { background:#003c66; }
+.btn-primary:hover { background:#3a2118; }
 .btn-secondary { background:#777; color:#fff; }
 .btn-secondary:hover { background:#555; }
 input[type="text"], input[type="email"], input[type="password"], input[type="number"], select, textarea {
@@ -37,7 +37,7 @@ th { background:var(--soft-bg); }
 .tab-content.active { display:block; }
 #login-section { max-width:400px; margin:80px auto; }
 .toast { position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:#333; color:#fff; padding:12px 24px; border-radius:6px; font-size:14px; display:none; z-index:1000; }
-.subject-tag { display:inline-block; padding:4px 10px; margin:4px; background:#eaf3fa; border:1px solid var(--navy); border-radius:14px; cursor:pointer; font-size:12px; }
+.subject-tag { display:inline-block; padding:4px 10px; margin:4px; background:#f3f0e8; border:1px solid var(--navy); border-radius:14px; cursor:pointer; font-size:12px; }
 .subject-tag.selected { background:var(--navy); color:#fff; }
 .subject-tag.priority-low { background:#fff3e0; border-color:#e08a3c; }
 .subject-tag.priority-low.selected { background:#e08a3c; color:#fff; }
@@ -48,6 +48,13 @@ th { background:var(--soft-bg); }
 .sched-cell.cell-ng { background:#ffcdd2; color:#8b0000; border-color:#c0392b; }
 .btn-day-all { padding:3px 6px; font-size:10px; background:var(--green); color:#fff; border:none; border-radius:3px; cursor:pointer; margin-top:2px; }
 .btn-day-clear { padding:3px 6px; font-size:10px; background:#999; color:#fff; border:none; border-radius:3px; cursor:pointer; margin-top:2px; margin-left:2px; }
+.sched-cell{display:inline-flex;align-items:center;justify-content:center;min-width:30px;min-height:30px;}
+@media(max-width:640px){
+  .card{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  #sched-table th,#sched-table td{padding:3px 4px;font-size:11px;}
+  .sched-cell{min-width:26px;min-height:26px;}
+  .header h1{font-size:15px;}
+}
 </style>
 </head>
 <body>
@@ -88,16 +95,17 @@ th { background:var(--soft-bg); }
         対象月を選んで、各セルをタップして勤務可否を切り替えてください。<br>
         タップ1回ごとに <strong>− → ✓出勤可 → △応相談 → ✗不可</strong> でサイクル切替。<br>
         平日は15:00以降、土日は9:00以降が選択可能です。<br>
+        🌟<strong>特別期（春期・GW・夏期・冬期）</strong>を選ぶと <strong>「日付ごと」</strong>入力になり、朝<strong>08:00〜・30分刻み</strong>で登録できます。週によって出勤時間が変わってもすべて拾えます。<br>
         曜日ごとの「全✓」ボタンで一括設定もできます。
       </div>
       <label>対象月<br>
         <select id="sched-month" onchange="app.renderSchedule()" style="max-width:200px;"></select>
       </label>
 
-      <div class="card-warn" style="margin-top:14px;background:#eef7ff;border-left-color:#005088;">
+      <div class="card-warn" style="margin-top:14px;background:#f7f5f0;border-left-color:#4b2c20;">
         <strong>🏫 校舎別 出勤可能開始時刻（重要）</strong><br>
         各校舎へ移動時間が異なる場合、校舎ごとに「何時から出勤できるか」を設定してください。<br>
-        <span style="font-size:12px;color:#005088;">例: 馬絹校の近くにお住まいで馬絹は18時から、見花山は移動に1時間かかり19時から出勤可能 → 馬絹=18:00、見花山=19:00</span>
+        <span style="font-size:12px;color:#4b2c20;">例: 馬絹校の近くにお住まいで馬絹は18時から、見花山は移動に1時間かかり19時から出勤可能 → 馬絹=18:00、見花山=19:00</span>
         <div style="display:flex;gap:18px;margin-top:10px;flex-wrap:wrap;">
           <label style="margin:0;">都筑見花山校<br>
             <select id="branch-start-mihanayama" style="max-width:160px;">
@@ -128,9 +136,7 @@ th { background:var(--soft-bg); }
         </div>
       </div>
 
-      <div style="overflow-x:auto;margin-top:14px;">
-        <table class="sched-table" id="sched-table"></table>
-      </div>
+      <div style="overflow-x:auto;margin-top:14px;" id="sched-wrap"></div>
       <div class="card-warn" style="margin-top:14px;">
         ⚠ 提出後は教室長の承認待ちとなります。承認されると正式登録です。
       </div>
@@ -235,10 +241,23 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycby5xhjjEHWc6-PQwTTK
 const DAY_NAMES_JP = ['月','火','水','木','金','土','日'];
 const DAY_NAMES_EN = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'];
 const ALL_TIME_SLOTS = ['09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00','21:00'];
+// ===== 特別期（春期/GW/夏期/冬期）：朝08:00〜・30分刻み =====
+const SPECIAL_TIME_SLOTS = ['08:00','08:30','09:00','09:30','10:00','10:30','11:00','11:30','12:00','12:30','13:00','13:30','14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30','18:00','18:30','19:00','19:30','20:00','20:30','21:00','21:30'];
+const DEFAULT_SPECIAL_PERIODS = [
+  {id:'2026_spring', label:'春期講習', dateStart:'2026-03-16', dateEnd:'2026-04-04'},
+  {id:'2026_gw',     label:'GW講習',   dateStart:'2026-04-25', dateEnd:'2026-05-03'},
+  {id:'2026_summer', label:'夏期講習', dateStart:'2026-07-20', dateEnd:'2026-08-28'},
+  {id:'2026_winter', label:'冬期講習', dateStart:'2026-12-25', dateEnd:'2027-01-07'}
+];
+function getSpecialPeriods(){ return DEFAULT_SPECIAL_PERIODS; }
+function isSpecialKey(m){ return String(m).indexOf('special:')===0; }
+function curMonthVal(){ var e=document.getElementById('sched-month'); return e ? e.value : ''; }
+function curSlots(){ return isSpecialKey(curMonthVal()) ? SPECIAL_TIME_SLOTS : ALL_TIME_SLOTS; }
 const WEEKDAY_START_HOUR = 15; // 月-金は15:00以降
 const WEEKEND_START_HOUR = 9;  // 土日は09:00以降
 // 曜日と時刻の組合せが選択可能かを判定
 function isSlotAllowed(dayEn, time) {
+  if (isSpecialKey(curMonthVal())) return true;
   const hour = parseInt(time.split(':')[0], 10);
   const isWeekend = (dayEn === 'saturday' || dayEn === 'sunday');
   return hour >= (isWeekend ? WEEKEND_START_HOUR : WEEKDAY_START_HOUR);
@@ -250,10 +269,27 @@ function nextSchedState(cur) {
   if (cur === 'maybe') return 'unavailable';
   return '';
 }
+// ===== 特別期（季節講習）：日付別ヘルパー（内部SeatPlannerと同一ロジック）=====
+function periodIdFromKey(m){ return isSpecialKey(m) ? String(m).slice(8) : null; }
+// 特別期キー(special:<id>)に含まれる全日付 'YYYY-MM-DD' を返す
+function datesInPeriod(pid){
+  var p = (getSpecialPeriods() || []).find(function(x){ return x.id === pid; });
+  if (!p) return [];
+  var out = [], d = new Date(p.dateStart + 'T00:00:00'), end = new Date(p.dateEnd + 'T00:00:00');
+  while (d <= end) {
+    out.push(d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'));
+    d.setDate(d.getDate() + 1);
+  }
+  return out;
+}
+// 日付 'YYYY-MM-DD' の曜日英名（DAY_NAMES_EN: 0=monday..6=sunday に合わせる）
+function dayEnOfDate(ds){ var d = new Date(ds + 'T00:00:00'); return DAY_NAMES_EN[(d.getDay()+6)%7]; }
 
 const app = {
   currentInst: null,
-  scheduleData: {}, // { 'monday': { '15:00': 'available' } }
+  scheduleData: {}, // 通常月: { 'monday': { '15:00': 'available' } }
+  specialCache: {}, // 特別期: { 'special:2026_summer': { tmpl:{dayEn:{time:st}}, dates:{'YYYY-MM-DD':{time:st}} } }
+  _renderedSpecialMonth: null, // 現在DOMに描画中の特別期キー（月切替時の退避用）
   subjectData: { subjects: [], priorities: {}, motivation: 'normal', maxKoma: 0 },
   
   showToast: function(msg, isError) {
@@ -313,6 +349,7 @@ const app = {
       opt.innerText = ym.getFullYear() + '年' + (ym.getMonth() + 1) + '月';
       sel.appendChild(opt);
     }
+    try{ getSpecialPeriods().forEach(function(p){ var o=document.createElement('option'); o.value='special:'+p.id; o.innerText='\uD83C\uDF1F'+p.label+'（'+p.dateStart+'〜'+p.dateEnd+'）'; sel.appendChild(o); }); }catch(e){}
     this.renderSchedule();
     this.renderSubjects();
     this.renderContact();
@@ -326,8 +363,14 @@ const app = {
   },
 
   renderSchedule: function() {
-    const tbl = document.getElementById('sched-table');
-    let html = '<thead><tr><th style="width:60px;">時刻</th>';
+    const wrap = document.getElementById('sched-wrap');
+    const monthVal = curMonthVal();
+    // 🌟特別期（季節講習）は「曜日テンプレ＋日付ごと上書き」で日付別に登録する
+    if (isSpecialKey(monthVal)) { this._renderSpecial(wrap, monthVal); return; }
+    this._cacheCurrentSpecial();       // 特別期→通常月に切替時、直前の入力を退避
+    this._renderedSpecialMonth = null;
+
+    let html = '<table class="sched-table"><thead><tr><th style="width:60px;">時刻</th>';
     DAY_NAMES_JP.forEach((d, idx) => {
       const dayEn = DAY_NAMES_EN[idx];
       html += '<th><div>' + d + '</div>'
@@ -336,7 +379,7 @@ const app = {
         + '</th>';
     });
     html += '</tr></thead><tbody>';
-    ALL_TIME_SLOTS.forEach(t => {
+    curSlots().forEach(t => {
       html += '<tr><td><strong>' + t + '</strong></td>';
       DAY_NAMES_EN.forEach(d => {
         const allowed = isSlotAllowed(d, t);
@@ -354,8 +397,127 @@ const app = {
       });
       html += '</tr>';
     });
-    html += '</tbody>';
-    tbl.innerHTML = html;
+    html += '</tbody></table>';
+    wrap.innerHTML = html;
+  },
+
+  // ===== 特別期（季節講習）：曜日テンプレ＋日付ごと（DOMを状態源とする。内部SeatPlannerと同方式）=====
+  _renderSpecial: function(wrap, monthVal) {
+    this._cacheCurrentSpecial();  // 別の月からの切替なら直前入力を退避してから再描画
+    const cache = this.specialCache[monthVal] || { tmpl:{}, dates:{} };
+    const dates = datesInPeriod(periodIdFromKey(monthVal));
+    const slots = SPECIAL_TIME_SLOTS;
+    const cellHtml = (status, attrs, extraCls) => {
+      const lbl = status==='available'?'✓':status==='maybe'?'△':status==='unavailable'?'✗':'−';
+      const cls = 'sched-cell' + (extraCls?(' '+extraCls):'')
+        + (status==='available'?' cell-ok':status==='maybe'?' cell-maybe':status==='unavailable'?' cell-ng':'');
+      return '<span class="'+cls+'" data-status="'+status+'" '+attrs+' onclick="app.toggleSpecialCell(this)">'+lbl+'</span>';
+    };
+    let html = '';
+    html += '<div class="card-info" style="font-size:12px;padding:8px 12px;">🌟 <strong>季節講習は「日付ごと」に登録します。</strong>週によって出勤時間が変わってもすべて拾えます。<br>'
+      + '<strong>①</strong> まず下の<strong>曜日テンプレ</strong>にいつものパターンを入力 → <strong>「全日付に展開」</strong>。'
+      + '<strong>②</strong> 時間が変わる日だけ下の表を直接タップして上書き（例: 7/22水は10時〜、7/29水は15時〜）。</div>';
+    // ① 曜日テンプレ
+    html += '<div style="font-weight:bold;color:#4b2c20;margin:10px 0 4px;">① 曜日テンプレ（毎週のいつものパターン）</div>';
+    html += '<div style="overflow-x:auto;"><table class="sched-table"><thead><tr><th style="width:56px;">時刻</th>';
+    DAY_NAMES_JP.forEach((d, idx) => {
+      const dayEn = DAY_NAMES_EN[idx];
+      html += '<th><div>'+d+'</div>'
+        + '<button class="btn-day-all" onclick="app.fillSpecialDay(\''+dayEn+'\',\'available\')">全✓</button>'
+        + '<button class="btn-day-clear" onclick="app.fillSpecialDay(\''+dayEn+'\',\'\')">クリア</button></th>';
+    });
+    html += '</tr></thead><tbody>';
+    slots.forEach(t => {
+      html += '<tr><td><strong>'+t+'</strong></td>';
+      DAY_NAMES_EN.forEach(dEn => {
+        const status = (cache.tmpl[dEn] && cache.tmpl[dEn][t]) || '';
+        html += '<td>'+cellHtml(status, 'data-day="'+dEn+'" data-time="'+t+'"', 'tmpl-cell')+'</td>';
+      });
+      html += '</tr>';
+    });
+    html += '</tbody></table></div>';
+    html += '<div style="margin:8px 0;"><button class="btn-secondary" onclick="app.expandTemplate()">▶ この曜日テンプレを全日付に展開</button>'
+      + '<span style="font-size:11px;color:#776660;margin-left:8px;">※展開すると下の日付表が上書きされます（先に展開→個別調整の順が簡単）</span></div>';
+    // ② 日付ごと
+    html += '<div style="font-weight:bold;color:#4b2c20;margin:14px 0 4px;">② 日付ごとの勤務可能時間（時間が変わる日だけ直す）</div>';
+    html += '<div style="overflow:auto;max-height:60vh;border:1px solid #e0ddd5;border-radius:6px;"><table class="sched-table" style="min-width:max-content;"><thead><tr><th style="width:78px;">日付</th><th style="width:40px;">一括</th>';
+    slots.forEach(t => { html += '<th style="font-size:10px;">'+t+'</th>'; });
+    html += '</tr></thead><tbody>';
+    dates.forEach(ds => {
+      const dt = new Date(ds+'T00:00:00');
+      const jp = DAY_NAMES_JP[(dt.getDay()+6)%7];
+      const isSun = dt.getDay()===0;
+      const mlabel = (dt.getMonth()+1)+'/'+dt.getDate();
+      const rowDay = cache.dates[ds] || {};
+      html += '<tr><td style="font-size:11px;'+(isSun?'color:#c00;':'')+'"><strong>'+mlabel+'</strong>('+jp+')</td>';
+      html += '<td style="padding:1px;"><button class="btn-day-clear" title="この日に曜日テンプレを適用" onclick="app.applyTemplateToDate(\''+ds+'\')">⟳</button></td>';
+      slots.forEach(t => {
+        const status = rowDay[t] || '';
+        html += '<td>'+cellHtml(status, 'data-date="'+ds+'" data-time="'+t+'"', '')+'</td>';
+      });
+      html += '</tr>';
+    });
+    html += '</tbody></table></div>';
+    wrap.innerHTML = html;
+    this._renderedSpecialMonth = monthVal;
+  },
+
+  toggleSpecialCell: function(cell) {
+    const order = ['','available','maybe','unavailable'];
+    const cur = cell.getAttribute('data-status') || '';
+    this._setSpecialCell(cell, order[(order.indexOf(cur)+1) % order.length]);
+  },
+  _setSpecialCell: function(cell, status) {
+    const isTmpl = cell.classList.contains('tmpl-cell');
+    cell.setAttribute('data-status', status);
+    cell.className = 'sched-cell' + (isTmpl?' tmpl-cell':'')
+      + (status==='available'?' cell-ok':status==='maybe'?' cell-maybe':status==='unavailable'?' cell-ng':'');
+    cell.innerText = status==='available'?'✓':status==='maybe'?'△':status==='unavailable'?'✗':'−';
+  },
+  fillSpecialDay: function(dayEn, status) {
+    const self = this;
+    document.querySelectorAll('#sched-wrap .sched-cell.tmpl-cell[data-day="'+dayEn+'"]')
+      .forEach(c => self._setSpecialCell(c, status));
+  },
+  _readTemplate: function() {
+    const wa = {};
+    document.querySelectorAll('#sched-wrap .sched-cell.tmpl-cell[data-day]').forEach(c => {
+      const d = c.getAttribute('data-day'), t = c.getAttribute('data-time'), s = c.getAttribute('data-status') || '';
+      if (s) { (wa[d] = wa[d] || {})[t] = s; }
+    });
+    return wa;
+  },
+  _readDates: function() {
+    const da = {};
+    document.querySelectorAll('#sched-wrap .sched-cell[data-date]').forEach(c => {
+      const ds = c.getAttribute('data-date'), t = c.getAttribute('data-time'), s = c.getAttribute('data-status') || '';
+      if (s) { (da[ds] = da[ds] || {})[t] = s; }
+    });
+    return da;
+  },
+  expandTemplate: function() {
+    const wa = this._readTemplate();
+    const self = this;
+    document.querySelectorAll('#sched-wrap .sched-cell[data-date]').forEach(c => {
+      const ds = c.getAttribute('data-date'), t = c.getAttribute('data-time');
+      const dEn = dayEnOfDate(ds);
+      self._setSpecialCell(c, (wa[dEn] && wa[dEn][t]) || '');
+    });
+    this.showToast('曜日テンプレを全日付に展開しました（時間が変わる日だけ調整→提出）');
+  },
+  applyTemplateToDate: function(ds) {
+    const wa = this._readTemplate();
+    const dEn = dayEnOfDate(ds);
+    const self = this;
+    document.querySelectorAll('#sched-wrap .sched-cell[data-date="'+ds+'"]').forEach(c => {
+      const t = c.getAttribute('data-time');
+      self._setSpecialCell(c, (wa[dEn] && wa[dEn][t]) || '');
+    });
+  },
+  // 特別期の現在のDOM入力を specialCache へ退避（月切替で消えないように）
+  _cacheCurrentSpecial: function() {
+    if (!this._renderedSpecialMonth) return;
+    this.specialCache[this._renderedSpecialMonth] = { tmpl: this._readTemplate(), dates: this._readDates() };
   },
 
   toggleSched: function(day, time) {
@@ -374,16 +536,23 @@ const app = {
 
   fillDay: function(day, val) {
     if (!this.scheduleData[day]) this.scheduleData[day] = {};
-    ALL_TIME_SLOTS.forEach(t => {
+    curSlots().forEach(t => {
       if (isSlotAllowed(day, t)) this.scheduleData[day][t] = val;
     });
     this.renderSchedule();
   },
 
   fillAll: function(val) {
+    // 特別期は日付セル（DOM）を一括、通常月は曜日オブジェクトを一括
+    if (isSpecialKey(curMonthVal())) {
+      const status = (val === 'available' || val === 'unavailable') ? val : '';
+      const self = this;
+      document.querySelectorAll('#sched-wrap .sched-cell[data-date]').forEach(c => self._setSpecialCell(c, status));
+      return;
+    }
     DAY_NAMES_EN.forEach(d => {
       this.scheduleData[d] = {};
-      ALL_TIME_SLOTS.forEach(t => {
+      curSlots().forEach(t => {
         if (isSlotAllowed(d, t)) this.scheduleData[d][t] = val;
       });
     });
@@ -400,22 +569,39 @@ const app = {
     if (!branchStartTime['都筑見花山校'] && !branchStartTime['宮前馬絹校']) {
       this.showToast('校舎別出勤可能時刻を最低1校舎は設定してください', true); return;
     }
-    if (!confirm(month + ' のスケジュールを提出します。\n校舎別出勤時刻: 見花山=' + (branchStartTime['都筑見花山校']||'勤務しない') + ' / 馬絹=' + (branchStartTime['宮前馬絹校']||'勤務しない') + '\n\n提出後は教室長の承認待ちとなります。よろしいですか？')) return;
+    const isSpecial = isSpecialKey(month);
+    let weeklyAvailability, dateAvailability = null, label = month;
+    if (isSpecial) {
+      weeklyAvailability = this._readTemplate();       // 曜日テンプレ（参考・後方互換）
+      dateAvailability = this._readDates();            // ★これがマッチングの判定ソース
+      if (!Object.keys(dateAvailability).length) {
+        this.showToast('日付ごとの勤務可能時間を入力してください（①テンプレ→②「全日付に展開」が簡単です）', true); return;
+      }
+      const p = getSpecialPeriods().find(x => ('special:'+x.id) === month);
+      if (p) label = p.label;
+    } else {
+      weeklyAvailability = this.scheduleData;
+    }
+    if (!confirm(label + ' のスケジュールを提出します。\n校舎別出勤時刻: 見花山=' + (branchStartTime['都筑見花山校']||'勤務しない') + ' / 馬絹=' + (branchStartTime['宮前馬絹校']||'勤務しない') + '\n\n提出後は教室長の承認待ちとなります。よろしいですか？')) return;
     try {
+      const payload = {
+        op: 'submitSchedule',
+        instId: this.currentInst.id,
+        passcode: document.getElementById('login-pass').value.trim(),
+        month: month,
+        weeklyAvailability: weeklyAvailability,
+        branchStartTime: branchStartTime
+      };
+      if (isSpecial) payload.dateAvailability = dateAvailability;
       const r = await fetch(GAS_API_URL, {
         method: 'POST', mode: 'cors', headers: {'Content-Type':'text/plain'},
-        body: JSON.stringify({
-          op: 'submitSchedule',
-          instId: this.currentInst.id,
-          passcode: document.getElementById('login-pass').value.trim(),
-          month: month,
-          weeklyAvailability: this.scheduleData,
-          branchStartTime: branchStartTime
-        })
+        body: JSON.stringify(payload)
       });
       const d = await r.json();
-      if (d.status === 'success') this.showToast('✓ ' + d.message);
-      else this.showToast('⚠ ' + d.message, true);
+      if (d.status === 'success') {
+        this.showToast('✓ ' + d.message);
+        if (isSpecial) this._cacheCurrentSpecial();   // 送信内容を退避（タブ移動で消えないように）
+      } else this.showToast('⚠ ' + d.message, true);
     } catch (e) {
       this.showToast('通信エラー: ' + e.message, true);
     }
