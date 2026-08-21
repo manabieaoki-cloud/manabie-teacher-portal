@@ -49,6 +49,10 @@ th { background:var(--soft-bg); }
 .btn-day-all { padding:3px 6px; font-size:10px; background:var(--green); color:#fff; border:none; border-radius:3px; cursor:pointer; margin-top:2px; }
 .btn-day-clear { padding:3px 6px; font-size:10px; background:#999; color:#fff; border:none; border-radius:3px; cursor:pointer; margin-top:2px; margin-left:2px; }
 .sched-cell{display:inline-flex;align-items:center;justify-content:center;min-width:30px;min-height:30px;}
+.brsel { font-size:11px; padding:2px 4px; border:1px solid #c8bfae; border-radius:4px; background:#fff; height:26px; width:100%; }
+.brsel.br-both { background:#f3f0e8; color:#4b2c20; }
+.brsel.br-mi   { background:#e3f0d8; color:#3a5a1a; font-weight:bold; }
+.brsel.br-ma   { background:#dce8f5; color:#204060; font-weight:bold; }
 @media(max-width:640px){
   .card{overflow-x:auto;-webkit-overflow-scrolling:touch;}
   #sched-table th,#sched-table td{padding:3px 4px;font-size:11px;}
@@ -95,7 +99,8 @@ th { background:var(--soft-bg); }
         対象月を選んで、各セルをタップして勤務可否を切り替えてください。<br>
         タップ1回ごとに <strong>− → ✓出勤可 → △応相談 → ✗不可</strong> でサイクル切替。<br>
         平日は15:00以降、土日は9:00以降が選択可能です。<br>
-        🌟<strong>特別期（春期・GW・夏期・冬期）</strong>を選ぶと、朝<strong>08:00〜・30分刻み</strong>で入力できます。<br>
+        🌟<strong>季節講習</strong>・📝<strong>テストスパート等のイベント</strong>を選ぶと、朝<strong>08:00〜・30分刻み</strong>＋<strong>日付ごと</strong>で入力できます。<br>
+        その期間は<strong>日ごとに「両校舎可能／見花山可能／馬絹可能」</strong>も選べます（既定＝両校舎可能）。<br>
         曜日ごとの「全✓」ボタンで一括設定もできます。
       </div>
       <label>対象月<br>
@@ -140,7 +145,7 @@ th { background:var(--soft-bg); }
       <div style="overflow-x:auto;margin-top:14px;">
         <table class="sched-table" id="sched-table"></table>
       </div>
-      <!-- 特別期（季節講習）のみ表示：日付ごとの調整 -->
+      <!-- 特別期（季節講習・テストスパート等のイベント）のみ表示：日付ごとの調整 -->
       <div id="sched-date-section" style="margin-top:14px;"></div>
       <!-- 提出前セルフ実施可否プレビュー -->
       <div id="sched-preview" style="margin-top:14px;"></div>
@@ -249,15 +254,53 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycby5xhjjEHWc6-PQwTTK
 const DAY_NAMES_JP = ['月','火','水','木','金','土','日'];
 const DAY_NAMES_EN = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'];
 const ALL_TIME_SLOTS = ['09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00','21:00'];
-// ===== 特別期（春期/GW/夏期/冬期）：朝08:00〜・30分刻み =====
+// ===== 特別期＝「レギュラー以外の授業イベント」（季節講習＋テストスパート等）：朝08:00〜・30分刻み =====
+// ⚠ 下の一覧は SeatPlanner 側の DEFAULT_SPECIAL_PERIODS と一致させること。
+//    GASパッチ適用後は起動時にクラウドの最新一覧を取りに行き、そちらが優先される。
 const SPECIAL_TIME_SLOTS = ['08:00','08:30','09:00','09:30','10:00','10:30','11:00','11:30','12:00','12:30','13:00','13:30','14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30','18:00','18:30','19:00','19:30','20:00','20:30','21:00','21:30'];
 const DEFAULT_SPECIAL_PERIODS = [
-  {id:'2026_spring', label:'春期講習', dateStart:'2026-03-16', dateEnd:'2026-04-04'},
-  {id:'2026_gw',     label:'GW講習',   dateStart:'2026-04-25', dateEnd:'2026-05-03'},
-  {id:'2026_summer', label:'夏期講習', dateStart:'2026-07-20', dateEnd:'2026-08-28'},
-  {id:'2026_winter', label:'冬期講習', dateStart:'2026-12-25', dateEnd:'2027-01-07'}
+  {id:'2026_spring', label:'春期講習', dateStart:'2026-03-16', dateEnd:'2026-04-04', kind:'season'},
+  {id:'2026_gw',     label:'GW講習',   dateStart:'2026-04-25', dateEnd:'2026-05-03', kind:'season'},
+  {id:'2026_summer', label:'夏期講習', dateStart:'2026-07-20', dateEnd:'2026-08-28', kind:'season'},
+  // 2026-08-19 追加：前期期末テストスパート（8/19〜8/28は夏期講習の登録がそのまま使われるので 8/29 開始）
+  {id:'2026_ts_zenki_kimatsu', label:'テストスパート（前期期末）', dateStart:'2026-08-29', dateEnd:'2026-09-15', kind:'event'},
+  {id:'2026_winter', label:'冬期講習', dateStart:'2026-12-25', dateEnd:'2027-01-07', kind:'season'}
 ];
-function getSpecialPeriods(){ return DEFAULT_SPECIAL_PERIODS; }
+// クラウド（塾長がSeatPlannerで登録したイベント一覧）が取れたらそちらを優先する。
+// 取れない／GASパッチ未適用なら上の内蔵リストでそのまま動く（＝壊れない）。
+// ===== 出勤できる校舎（特別期＝日付ごとに選べる） 2026-08-21 追加 =====
+// 値は SeatPlanner / 内部管理と同じ校舎名をそのまま使う（'both' は両校舎可能）。
+const BR_BOTH = 'both', BR_MI = '都筑見花山校', BR_MA = '宮前馬絹校';
+const BR_OPTIONS = [
+  { v: BR_BOTH, label: '両校舎可能' },
+  { v: BR_MI,   label: '見花山可能' },
+  { v: BR_MA,   label: '馬絹可能' }
+];
+function brClass(v){ return v === BR_MI ? 'br-mi' : v === BR_MA ? 'br-ma' : 'br-both'; }
+function brLabel(v){ var o = BR_OPTIONS.filter(function(x){ return x.v === v; })[0]; return o ? o.label : '両校舎可能'; }
+// 提出済みデータから日付別の校舎を読む。dateBranch（正式）→ dateAvailability[ds]._branch（GAS未パッチでも残る控え）の順。
+function readDateBranch(sched){
+  var out = {};
+  if(!sched) return out;
+  if(sched.dateBranch && typeof sched.dateBranch === 'object'){
+    Object.keys(sched.dateBranch).forEach(function(ds){ if(sched.dateBranch[ds]) out[ds] = sched.dateBranch[ds]; });
+  }
+  var da = sched.dateAvailability || {};
+  Object.keys(da).forEach(function(ds){ if(!out[ds] && da[ds] && da[ds]._branch) out[ds] = da[ds]._branch; });
+  return out;
+}
+var SP_REMOTE = null;
+function getSpecialPeriods(){ return (Array.isArray(SP_REMOTE) && SP_REMOTE.length) ? SP_REMOTE : DEFAULT_SPECIAL_PERIODS; }
+function spIcon(p){ return (p && p.kind === 'event') ? '\uD83D\uDCDD' : '\uD83C\uDF1F'; }
+function spOptionText(p){ return spIcon(p) + p.label + '（' + p.dateStart + '〜' + p.dateEnd + '）'; }
+// GET（読み取り専用）で取得。未対応のGASでも副作用ゼロで、失敗時は内蔵リストにフォールバック。
+async function loadRemoteSpecialPeriods(){
+  try{
+    const r = await fetch(GAS_API_URL + '?op=specialPeriods', { method:'GET' });
+    const d = await r.json();
+    if(d && Array.isArray(d.specialPeriods) && d.specialPeriods.length) SP_REMOTE = d.specialPeriods;
+  }catch(e){ console.warn('イベント一覧の取得に失敗（内蔵リストを使用）:', e); }
+}
 function isSpecialKey(m){ return String(m).indexOf('special:')===0; }
 function periodIdFromKey(m){ return isSpecialKey(m) ? String(m).slice(8) : ''; }
 function pad2(n){ return String(n).padStart(2,'0'); }
@@ -294,6 +337,7 @@ const app = {
   currentInst: null,
   scheduleData: {}, // { 'monday': { '15:00': 'available' } }
   dateData: {},     // 特別期のみ: { 'YYYY-MM-DD': { '08:00': 'available' } }
+  dateBranch: {},   // 特別期のみ: { 'YYYY-MM-DD': 'both' | '都筑見花山校' | '宮前馬絹校' }（未設定=both）
   _lastSchedMonth: null,
   subjectData: { subjects: [], priorities: {}, motivation: 'normal', maxKoma: 0 },
   
@@ -322,6 +366,7 @@ const app = {
         document.getElementById('user-info').innerText = d.inst.name + ' 先生';
         document.getElementById('login-section').style.display = 'none';
         document.getElementById('main-section').style.display = 'block';
+        await loadRemoteSpecialPeriods();   // 塾長が登録したイベント（テストスパート等）を反映
         this.initMain();
       } else {
         err.innerText = d.message || 'ログイン失敗';
@@ -354,7 +399,7 @@ const app = {
       opt.innerText = ym.getFullYear() + '年' + (ym.getMonth() + 1) + '月';
       sel.appendChild(opt);
     }
-    try{ getSpecialPeriods().forEach(function(p){ var o=document.createElement('option'); o.value='special:'+p.id; o.innerText='\uD83C\uDF1F'+p.label+'（'+p.dateStart+'〜'+p.dateEnd+'）'; sel.appendChild(o); }); }catch(e){}
+    try{ getSpecialPeriods().forEach(function(p){ var o=document.createElement('option'); o.value='special:'+p.id; o.innerText=spOptionText(p); sel.appendChild(o); }); }catch(e){}
     this.onMonthChange();
     this.renderSubjects();
     this.renderContact();
@@ -370,7 +415,7 @@ const app = {
   renderSchedule: function() {
     // 対象月が変わったら日付別データはリセット（セル切替の再描画では保持）
     const _m = curMonthVal();
-    if (this._lastSchedMonth !== _m) { this.dateData = {}; this._lastSchedMonth = _m; }
+    if (this._lastSchedMonth !== _m) { this.dateData = {}; this.dateBranch = {}; this._lastSchedMonth = _m; }
     const tbl = document.getElementById('sched-table');
     let html = '<thead><tr><th style="width:60px;">時刻</th>';
     DAY_NAMES_JP.forEach((d, idx) => {
@@ -413,10 +458,19 @@ const app = {
     const month = curMonthVal();
     if (!isSpecialKey(month)) { host.innerHTML = ''; this._weeks = []; return; }
     let html = '<div class="card-info" style="font-size:12px;">'
-      + '🌟 <strong>季節講習は「日付ごと」に登録できます。</strong>週によって出勤時間が変わってもすべて反映されます。<br>'
+      + '🌟 <strong>この期間は「日付ごと」に登録できます。</strong>（季節講習・テストスパート等）週によって出勤時間が変わってもすべて反映されます。<br>'
       + '<strong>①</strong> 上の表にいつもの曜日パターンを入力 → 下の <strong>「▶ 全日付に展開」</strong>。'
       + '<strong>②</strong> 時間が変わる日だけ、日付表で直接タップして直してください。</div>';
     html += '<div style="margin:8px 0;"><button class="btn-secondary" onclick="app.expandToAllDates()">▶ 上の曜日パターンを全日付に展開</button></div>';
+    // 🏫 出勤できる校舎（この期間の既定 → 日ごとに上書き可）
+    html += '<div class="card-warn" style="background:#f7f5f0;border-left-color:#4b2c20;font-size:12px;">'
+      + '<strong>🏫 出勤できる校舎</strong>（この期間の既定）　'
+      + '<select id="sp-branch-bulk" style="max-width:170px;display:inline-block;width:auto;">'
+      + BR_OPTIONS.map(function(o){ return '<option value="' + o.v + '">' + o.label + '</option>'; }).join('')
+      + '</select> '
+      + '<button class="btn-secondary" style="font-size:12px;padding:6px 12px;" onclick="app.applyBranchToAllDates()">全日程にまとめて適用</button>'
+      + '<div style="margin-top:6px;color:#4b2c20;">日によって行ける校舎が変わる場合は、下の日付表の<strong>「校舎」欄</strong>で日ごとに変えてください（既定＝両校舎可能）。</div>'
+      + '</div>';
     if (Object.keys(this.dateData).length === 0) {
       html += '<div style="font-size:12px;color:#776660;">「全日付に展開」を押すと、日付ごとの調整表が出ます。<br>'
         + '曜日パターンのままでOKなら、そのまま <strong>「📤 提出する」</strong> で全日付に自動展開して提出します。</div>';
@@ -459,9 +513,10 @@ const app = {
     const w = (this._weeks || [])[i];
     if (!w) return;
     const slots = SPECIAL_TIME_SLOTS;
-    const col = '76px repeat(' + slots.length + ',30px)';
+    const col = '76px 104px repeat(' + slots.length + ',30px)';
     let html = '<div style="display:grid;grid-template-columns:' + col + ';gap:2px;padding:2px;width:max-content;background:#efe9df;">';
     html += '<div class="sched-cell cell-disabled" style="font-size:9px;">日付</div>';
+    html += '<div class="sched-cell cell-disabled" style="font-size:9px;">校舎</div>';
     slots.forEach(function(t) { html += '<div class="sched-cell cell-disabled" style="font-size:8px;padding:2px 0;">' + t + '</div>'; });
     const self = this;
     w.dates.forEach(function(ds) {
@@ -470,6 +525,12 @@ const app = {
       const isSun = dt.getDay() === 0;
       const row = self.dateData[ds] || {};
       html += '<div class="sched-cell cell-disabled" style="font-size:9px;' + (isSun ? 'color:#c00;' : '') + '">' + (dt.getMonth() + 1) + '/' + dt.getDate() + '(' + jp + ')</div>';
+      // 🏫 この日に出勤できる校舎（両校舎可能／見花山可能／馬絹可能）
+      const bcur = self.dateBranch[ds] || BR_BOTH;
+      html += '<div style="display:flex;align-items:center;padding:0 1px;">'
+        + '<select class="brsel ' + brClass(bcur) + '" onchange="app.setDateBranch(this,\'' + ds + '\')">'
+        + BR_OPTIONS.map(function(o){ return '<option value="' + o.v + '"' + (o.v === bcur ? ' selected' : '') + '>' + o.label + '</option>'; }).join('')
+        + '</select></div>';
       slots.forEach(function(t) {
         const cur = row[t] || '';
         let cls = 'sched-cell', lab = '−';
@@ -493,6 +554,28 @@ const app = {
     el.innerText = next === 'available' ? '✓' : next === 'maybe' ? '△' : next === 'unavailable' ? '✗' : '−';
   },
 
+  // 🏫 その日に出勤できる校舎を切り替える（再描画しない＝開いている週・スクロール位置を保持）
+  setDateBranch: function(el, ds) {
+    const v = el.value || BR_BOTH;
+    if (v === BR_BOTH) delete this.dateBranch[ds]; else this.dateBranch[ds] = v;
+    el.className = 'brsel ' + brClass(v);
+  },
+
+  // 🏫 期間内の全日付に、選んだ校舎をまとめて適用
+  applyBranchToAllDates: function() {
+    const month = curMonthVal();
+    if (!isSpecialKey(month)) return;
+    const el = document.getElementById('sp-branch-bulk');
+    const v = (el && el.value) || BR_BOTH;
+    const dates = datesInPeriod(periodIdFromKey(month));
+    const self = this;
+    this.dateBranch = {};
+    if (v !== BR_BOTH) dates.forEach(function(ds){ self.dateBranch[ds] = v; });
+    // 描画済みの週のセレクトを即時反映（未描画の週は開いたときに反映される）
+    document.querySelectorAll('#sched-date-section .brsel').forEach(function(sel){ sel.value = v; sel.className = 'brsel ' + brClass(v); });
+    this.showToast('全日程を「' + brLabel(v) + '」にしました。変わる日だけ日付表で直してください。');
+  },
+
   // 曜日テンプレ(scheduleData)を期間内の全日付へ展開して dateData を作る
   expandToAllDates: function() {
     const month = curMonthVal();
@@ -514,6 +597,7 @@ const app = {
   onMonthChange: async function() {
     this.scheduleData = {};
     this.dateData = {};
+    this.dateBranch = {};
     this._weeks = [];
     this._lastSchedMonth = curMonthVal();
     this.renderSchedule();
@@ -535,6 +619,7 @@ const app = {
         const s = d.schedule;
         this.scheduleData = s.weeklyAvailability || {};
         this.dateData = s.dateAvailability || {};
+        this.dateBranch = readDateBranch(s);   // 🏫 前回選んだ校舎（両校舎/見花山/馬絹）も戻す
         if (s.branchStartTime) {
           const mi = document.getElementById('branch-start-mihanayama');
           const ma = document.getElementById('branch-start-majikano');
@@ -561,12 +646,15 @@ const app = {
     const toMin = function(hhmm) { if (!hhmm) return null; const p = hhmm.split(':'); return parseInt(p[0], 10) * 60 + parseInt(p[1], 10); };
     const miMin = toMin(mi), maMin = toMin(ma);
     let okMi = 0, okMa = 0, avail = 0;
-    const addSlot = function(t, status) {
+    // br = その日に出勤できる校舎（'both' 以外はその校舎だけ加算）
+    const addSlot = function(t, status, br) {
+      if (t === '_branch') return;   // 校舎の控え値は枠ではない
       if (status !== 'available' && status !== 'maybe') return;
       avail++;
       const tm = toMin(t);
-      if (miMin != null && tm >= miMin) okMi++;
-      if (maMin != null && tm >= maMin) okMa++;
+      const b = br || BR_BOTH;
+      if (miMin != null && tm >= miMin && (b === BR_BOTH || b === BR_MI)) okMi++;
+      if (maMin != null && tm >= maMin && (b === BR_BOTH || b === BR_MA)) okMa++;
     };
     const isSp = isSpecialKey(month);
     if (isSp) {
@@ -575,16 +663,26 @@ const app = {
         host.innerHTML = '<div class="card-info" style="font-size:12px;">まず「▶ 全日付に展開」してからプレビューすると、日付ごとの実施可能枠を正確に試算できます。</div>';
         return;
       }
-      Object.keys(dd).forEach(function(ds) { Object.keys(dd[ds]).forEach(function(t) { addSlot(t, dd[ds][t]); }); });
+      const dbr = this.dateBranch || {};
+      Object.keys(dd).forEach(function(ds) { const b = dbr[ds] || BR_BOTH; Object.keys(dd[ds]).forEach(function(t) { addSlot(t, dd[ds][t], b); }); });
     } else {
       const sd = this.scheduleData;
-      Object.keys(sd).forEach(function(day) { Object.keys(sd[day]).forEach(function(t) { addSlot(t, sd[day][t]); }); });
+      Object.keys(sd).forEach(function(day) { Object.keys(sd[day]).forEach(function(t) { addSlot(t, sd[day][t], BR_BOTH); }); });
     }
     let html = '<div class="card-info" style="font-size:12.5px;background:#f3f0e8;border-left:4px solid #8DB600;">'
       + '<strong>📊 提出前プレビュー</strong>（' + (isSp ? '日付別' : '曜日別') + '／「出勤可」＋「応相談」を実施可能候補として試算）<br>'
       + '入力した実施可能候補：<strong>' + avail + '</strong> 枠<br>'
       + '　🏫 都筑見花山校（' + (mi || '勤務しない') + '〜）：<strong>' + (miMin != null ? okMi : '—') + '</strong> 枠が実施可能<br>'
       + '　🏫 宮前馬絹校（' + (ma || '勤務しない') + '〜）：<strong>' + (maMin != null ? okMa : '—') + '</strong> 枠が実施可能';
+    if (isSp) {
+      const dbr2 = this.dateBranch || {};
+      const cnt = { both:0, mi:0, ma:0 };
+      Object.keys(this.dateData).forEach(function(ds){
+        const b = dbr2[ds] || BR_BOTH;
+        if (b === BR_MI) cnt.mi++; else if (b === BR_MA) cnt.ma++; else cnt.both++;
+      });
+      html += '<br>🏫 校舎の内訳：両校舎可能 <strong>' + cnt.both + '</strong> 日 ／ 見花山可能 <strong>' + cnt.mi + '</strong> 日 ／ 馬絹可能 <strong>' + cnt.ma + '</strong> 日';
+    }
     if (miMin != null && okMi === 0 && avail > 0) html += '<br><span style="color:#c0392b;">⚠ 見花山は開始時刻が遅く、入力枠が実施対象になりません。開始時刻を早めるか枠を見直してください。</span>';
     if (maMin != null && okMa === 0 && avail > 0) html += '<br><span style="color:#c0392b;">⚠ 馬絹は開始時刻が遅く、入力枠が実施対象になりません。開始時刻を早めるか枠を見直してください。</span>';
     html += '</div>';
@@ -636,11 +734,32 @@ const app = {
     // 特別期（季節講習）は「日付ごと」で送る。未展開なら曜日パターンを全日付に自動展開。
     const isSp = isSpecialKey(month);
     let dateAvailability = null;
+    let dateBranch = null;
+    let brSummary = '';
     if (isSp) {
       if (Object.keys(this.dateData).length === 0) { this.expandToAllDates(); }
       dateAvailability = this.dateData;
+      // 🏫 日付ごとの校舎。未指定の日は「両校舎可能」として明示的に埋める（受け取り側で迷わない）。
+      dateBranch = {};
+      const dbr = this.dateBranch || {};
+      const cnt = { both:0, mi:0, ma:0 };
+      Object.keys(dateAvailability).forEach(function(ds){
+        const b = dbr[ds] || BR_BOTH;
+        dateBranch[ds] = b;
+        // GAS未パッチでも消えないよう、日付データの中にも控えを持たせる（時刻キーとは衝突しない '_branch'）
+        dateAvailability[ds]._branch = b;
+        if (b === BR_MI) cnt.mi++; else if (b === BR_MA) cnt.ma++; else cnt.both++;
+      });
+      brSummary = '\n出勤できる校舎: 両校舎可能 ' + cnt.both + '日 / 見花山可能 ' + cnt.mi + '日 / 馬絹可能 ' + cnt.ma + '日';
+      // 整合チェック：その校舎を「勤務しない」にしているのに、その校舎だけの日がある
+      if (cnt.mi > 0 && !branchStartTime['都筑見花山校']) {
+        this.showToast('「見花山可能」の日がありますが、上の見花山が「勤務しない」です。開始時刻を選んでください', true); return;
+      }
+      if (cnt.ma > 0 && !branchStartTime['宮前馬絹校']) {
+        this.showToast('「馬絹可能」の日がありますが、上の馬絹が「勤務しない」です。開始時刻を選んでください', true); return;
+      }
     }
-    if (!confirm(month + ' のスケジュールを提出します。\n校舎別出勤時刻: 見花山=' + (branchStartTime['都筑見花山校']||'勤務しない') + ' / 馬絹=' + (branchStartTime['宮前馬絹校']||'勤務しない') + (isSp ? '\n（季節講習は日付ごとに登録されます）' : '') + '\n\n提出後は教室長の承認待ちとなります。よろしいですか？')) return;
+    if (!confirm(month + ' のスケジュールを提出します。\n校舎別出勤時刻: 見花山=' + (branchStartTime['都筑見花山校']||'勤務しない') + ' / 馬絹=' + (branchStartTime['宮前馬絹校']||'勤務しない') + (isSp ? '\n（この期間は日付ごとに登録されます）' + brSummary : '') + '\n\n提出後は教室長の承認待ちとなります。よろしいですか？')) return;
     try {
       const payload = {
         op: 'submitSchedule',
@@ -650,7 +769,7 @@ const app = {
         weeklyAvailability: this.scheduleData,
         branchStartTime: branchStartTime
       };
-      if (isSp) payload.dateAvailability = dateAvailability;
+      if (isSp) { payload.dateAvailability = dateAvailability; payload.dateBranch = dateBranch; }
       const r = await fetch(GAS_API_URL, {
         method: 'POST', mode: 'cors', headers: {'Content-Type':'text/plain'},
         body: JSON.stringify(payload)
