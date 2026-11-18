@@ -266,7 +266,8 @@ const DEFAULT_SPECIAL_PERIODS = [
   {id:'2026_ts_zenki_kimatsu', label:'テストスパート（前期期末）', dateStart:'2026-08-29', dateEnd:'2026-09-15', kind:'event'},
   // 2026-10-16 追加：後期中間テストスパート（11月分）。講師の提出締切 10/22(木)
   {id:'2026_ts_kouki_chukan', label:'テストスパート（後期中間）', dateStart:'2026-10-26', dateEnd:'2026-11-12', kind:'event'},
-  {id:'2026_winter', label:'冬期講習', dateStart:'2026-12-25', dateEnd:'2027-01-07', kind:'season'}
+  // 2026-11-19 変更：内部生の冬期講習が 11/22 開始。土日祝・冬休み(12/25〜)は 9:00〜、それ以外の平日は 15:00〜
+  {id:'2026_winter', label:'冬期講習', dateStart:'2026-11-22', dateEnd:'2027-01-07', kind:'season', holidayStart:'09:00', weekdayStart:'15:00', schoolBreakFrom:'2026-12-25'}
 ];
 // クラウド（塾長がSeatPlannerで登録したイベント一覧）が取れたらそちらを優先する。
 // 取れない／GASパッチ未適用なら上の内蔵リストでそのまま動く（＝壊れない）。
@@ -292,7 +293,36 @@ function readDateBranch(sched){
   return out;
 }
 var SP_REMOTE = null;
-function getSpecialPeriods(){ return (Array.isArray(SP_REMOTE) && SP_REMOTE.length) ? SP_REMOTE : DEFAULT_SPECIAL_PERIODS; }
+// クラウド側の一覧が古い場合でも、ここで指定した項目（期間・入力可能時刻）は必ず上書きする
+const PERIOD_OVERRIDES = {
+  '2026_winter': { dateStart:'2026-11-22', dateEnd:'2027-01-07', holidayStart:'09:00', weekdayStart:'15:00', schoolBreakFrom:'2026-12-25' }
+};
+function getSpecialPeriods(){
+  var base = (Array.isArray(SP_REMOTE) && SP_REMOTE.length) ? SP_REMOTE : DEFAULT_SPECIAL_PERIODS;
+  var out = base.map(function(p){ var o = PERIOD_OVERRIDES[p.id]; return o ? Object.assign({}, p, o) : p; });
+  Object.keys(PERIOD_OVERRIDES).forEach(function(id){
+    if(!out.some(function(p){ return p.id===id; })){
+      var d = DEFAULT_SPECIAL_PERIODS.filter(function(p){ return p.id===id; })[0];
+      if(d) out.push(Object.assign({}, d, PERIOD_OVERRIDES[id]));
+    }
+  });
+  return out;
+}
+function getPeriod(id){ return getSpecialPeriods().filter(function(p){ return p.id===id; })[0] || null; }
+// 祝日（期間内の判定用）
+const JP_HOLIDAYS = ['2026-11-03','2026-11-23','2027-01-01','2027-01-11','2027-02-11','2027-02-23','2027-03-20'];
+function isHolidayDate(ds){ var g=new Date(ds+'T00:00:00').getDay(); return g===0 || g===6 || JP_HOLIDAYS.indexOf(ds)>=0; }
+// 期間に時刻ルールがあるか（holidayStart/weekdayStart）
+function periodHasRule(p){ return !!(p && (p.holidayStart || p.weekdayStart)); }
+// その日付で入力できる最も早い時刻（ルールなしの期間は 08:00）
+function earliestForDate(p, ds){
+  if(!periodHasRule(p)) return SPECIAL_TIME_SLOTS[0];
+  var off = isHolidayDate(ds) || (p.schoolBreakFrom && ds >= p.schoolBreakFrom);
+  return off ? (p.holidayStart || SPECIAL_TIME_SLOTS[0]) : (p.weekdayStart || SPECIAL_TIME_SLOTS[0]);
+}
+function isDateSlotAllowed(p, ds, t){ return t >= earliestForDate(p, ds); }
+// 曜日テンプレ（上の表）で入力できる最も早い時刻：ルールあり期間は holidayStart（冬休み平日にも使うため）
+function templateEarliest(p){ return periodHasRule(p) ? (p.holidayStart || SPECIAL_TIME_SLOTS[0]) : SPECIAL_TIME_SLOTS[0]; }
 function spIcon(p){ return (p && p.kind === 'event') ? '\uD83D\uDCDD' : '\uD83C\uDF1F'; }
 function spOptionText(p){ return spIcon(p) + p.label + '（' + p.dateStart + '〜' + p.dateEnd + '）'; }
 // GET（読み取り専用）で取得。未対応のGASでも副作用ゼロで、失敗時は内蔵リストにフォールバック。
@@ -322,7 +352,7 @@ const WEEKDAY_START_HOUR = 15; // 月-金は15:00以降
 const WEEKEND_START_HOUR = 9;  // 土日は09:00以降
 // 曜日と時刻の組合せが選択可能かを判定
 function isSlotAllowed(dayEn, time) {
-  if (isSpecialKey(curMonthVal())) return true;
+  if (isSpecialKey(curMonthVal())) return time >= templateEarliest(getPeriod(periodIdFromKey(curMonthVal())));
   const hour = parseInt(time.split(':')[0], 10);
   const isWeekend = (dayEn === 'saturday' || dayEn === 'sunday');
   return hour >= (isWeekend ? WEEKEND_START_HOUR : WEEKDAY_START_HOUR);
@@ -462,7 +492,9 @@ const app = {
     let html = '<div class="card-info" style="font-size:12px;">'
       + '🌟 <strong>この期間は「日付ごと」に登録できます。</strong>（季節講習・テストスパート等）週によって出勤時間が変わってもすべて反映されます。<br>'
       + '<strong>①</strong> 上の表にいつもの曜日パターンを入力 → 下の <strong>「▶ 全日付に展開」</strong>。'
-      + '<strong>②</strong> 時間が変わる日だけ、日付表で直接タップして直してください。</div>';
+      + '<strong>②</strong> 時間が変わる日だけ、日付表で直接タップして直してください。'
+      + (periodHasRule(getPeriod(periodIdFromKey(month))) ? ('<br>⏰ この期間は <strong>土日祝' + (getPeriod(periodIdFromKey(month)).schoolBreakFrom ? '・冬休み（' + getPeriod(periodIdFromKey(month)).schoolBreakFrom.slice(5).replace('-','/') + '〜）' : '') + 'は ' + getPeriod(periodIdFromKey(month)).holidayStart + '〜</strong>、<strong>それ以外の平日は ' + getPeriod(periodIdFromKey(month)).weekdayStart + '〜</strong> 入力できます。') : '')
+      + '</div>';
     html += '<div style="margin:8px 0;"><button class="btn-secondary" onclick="app.expandToAllDates()">▶ 上の曜日パターンを全日付に展開</button></div>';
     // 🏫 出勤できる校舎（この期間の既定 → 日ごとに上書き可）
     html += '<div class="card-warn" style="background:#f7f5f0;border-left-color:#4b2c20;font-size:12px;">'
@@ -514,7 +546,8 @@ const app = {
     if (!body || body.getAttribute('data-done') === '1') return;
     const w = (this._weeks || [])[i];
     if (!w) return;
-    const slots = SPECIAL_TIME_SLOTS;
+    const per = getPeriod(periodIdFromKey(curMonthVal()));
+    const slots = SPECIAL_TIME_SLOTS.filter(function(t){ return t >= templateEarliest(per); });
     const col = '76px 104px repeat(' + slots.length + ',30px)';
     let html = '<div style="display:grid;grid-template-columns:' + col + ';gap:2px;padding:2px;width:max-content;background:#efe9df;">';
     html += '<div class="sched-cell cell-disabled" style="font-size:9px;">日付</div>';
@@ -524,9 +557,10 @@ const app = {
     w.dates.forEach(function(ds) {
       const dt = new Date(ds + 'T00:00:00');
       const jp = DAY_NAMES_JP[(dt.getDay() + 6) % 7];
-      const isSun = dt.getDay() === 0;
+      const isRed = dt.getDay() === 0 || JP_HOLIDAYS.indexOf(ds) >= 0;
+      const isSat = dt.getDay() === 6 && !isRed;
       const row = self.dateData[ds] || {};
-      html += '<div class="sched-cell cell-disabled" style="font-size:9px;' + (isSun ? 'color:#c00;' : '') + '">' + (dt.getMonth() + 1) + '/' + dt.getDate() + '(' + jp + ')</div>';
+      html += '<div class="sched-cell cell-disabled" style="font-size:9px;' + (isRed ? 'color:#c00;' : isSat ? 'color:#005088;' : '') + '">' + (dt.getMonth() + 1) + '/' + dt.getDate() + '(' + jp + ')</div>';
       // 🏫 この日に出勤できる校舎（両校舎可能／見花山可能／馬絹可能）
       const bcur = self.dateBranch[ds] || BR_BOTH;
       html += '<div style="display:flex;align-items:center;padding:0 1px;">'
@@ -534,6 +568,7 @@ const app = {
         + BR_OPTIONS.map(function(o){ return '<option value="' + o.v + '"' + (o.v === bcur ? ' selected' : '') + '>' + o.label + '</option>'; }).join('')
         + '</select></div>';
       slots.forEach(function(t) {
+        if (!isDateSlotAllowed(per, ds, t)) { html += '<div class="sched-cell cell-disabled" style="min-height:26px;opacity:.35;">−</div>'; return; }
         const cur = row[t] || '';
         let cls = 'sched-cell', lab = '−';
         if (cur === 'available') { cls += ' cell-ok'; lab = '✓'; }
@@ -585,10 +620,11 @@ const app = {
     const dates = datesInPeriod(periodIdFromKey(month));
     const self = this;
     this.dateData = {};
+    const per = getPeriod(periodIdFromKey(month));
     dates.forEach(ds => {
       const wa = self.scheduleData[dayEnOfDate(ds)] || {};
       SPECIAL_TIME_SLOTS.forEach(t => {
-        if (wa[t] && wa[t] !== '') { (self.dateData[ds] = self.dateData[ds] || {})[t] = wa[t]; }
+        if (wa[t] && wa[t] !== '' && isDateSlotAllowed(per, ds, t)) { (self.dateData[ds] = self.dateData[ds] || {})[t] = wa[t]; }
       });
     });
     this.renderDateSection();
@@ -741,6 +777,10 @@ const app = {
     if (isSp) {
       if (Object.keys(this.dateData).length === 0) { this.expandToAllDates(); }
       dateAvailability = this.dateData;
+      const perS = getPeriod(periodIdFromKey(month));
+      Object.keys(dateAvailability).forEach(function(ds){
+        Object.keys(dateAvailability[ds]).forEach(function(t){ if (t !== '_branch' && !isDateSlotAllowed(perS, ds, t)) delete dateAvailability[ds][t]; });
+      });
       // 🏫 日付ごとの校舎。未指定の日は「両校舎可能」として明示的に埋める（受け取り側で迷わない）。
       dateBranch = {};
       const dbr = this.dateBranch || {};
